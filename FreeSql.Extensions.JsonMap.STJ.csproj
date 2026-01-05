@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFrameworks>netstandard2.0;net461</TargetFrameworks>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+		<Authors>FreeSql;ncc;YeXiangQin;Woodcoal</Authors>
+		<Description>FreeSql 扩展包，可实现实体类属性为对象时，以JSON形式映射存储。相比官方版本，此版本基于 System.Text.Json 重构。</Description>
+		<PackageProjectUrl>https://github.com/woodcoal/FreeSql_JsonMap</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/woodcoal/FreeSql_JsonMap</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageTags>FreeSql;ORM</PackageTags>
+		<PackageId>$(AssemblyName)</PackageId>
+		<PackageIcon>logo.png</PackageIcon>
+		<Title>$(AssemblyName)</Title>
+		<IsPackable>true</IsPackable>
+		<GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+		<SignAssembly>true</SignAssembly>
+		<AssemblyOriginatorKeyFile>key.snk</AssemblyOriginatorKeyFile>
+		<DelaySign>false</DelaySign>
+		<Version>3.5.305</Version>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|netstandard2.0|AnyCPU'">
+		<DocumentationFile>$(AssemblyName).xml</DocumentationFile>
+		<WarningLevel>3</WarningLevel>
+	</PropertyGroup>
+	
+	<ItemGroup>
+		<PackageReference Include="FreeSql" Version="3.5.305" />
+		<PackageReference Include="System.Text.Json" Version="6.0.10" />
+	</ItemGroup>
+
+
+	<ItemGroup>
+		<None Include="README.md" Pack="true" PackagePath="\"/>
+		<None Include="README.zh-CN.md" Pack="true" PackagePath="\"/>
+		<None Include="logo.png" Pack="true" PackagePath="\" />
+		<None Include="LICENSE" Pack="true" PackagePath="\" />
+	</ItemGroup>
+</Project>
