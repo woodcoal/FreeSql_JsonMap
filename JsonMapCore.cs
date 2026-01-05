@@ -20,9 +20,25 @@ public static class FreeSqlJsonMapCoreExtensions {
 	//private static readonly MethodInfo _MethodJsonConvertDeserializeObject = typeof(JsonConvert).GetMethod("DeserializeObject", new[] { typeof(string), typeof(Type), typeof(JsonSerializerSettings) });
 	//private static readonly MethodInfo _MethodJsonConvertSerializeObject = typeof(JsonConvert).GetMethod("SerializeObject", new[] { typeof(object), typeof(JsonSerializerSettings) });
 
-	private static readonly MethodInfo _MethodJsonConvertDeserializeObject = typeof(JsonSerializer).GetMethod("Deserialize", new[] { typeof(string), typeof(Type), typeof(JsonSerializerOptions) });
+	//private static readonly MethodInfo _MethodJsonConvertDeserializeObject = typeof(JsonSerializer).GetMethod("Deserialize", new[] { typeof(string), typeof(Type), typeof(JsonSerializerOptions) });
 
-	private static readonly MethodInfo _MethodJsonConvertSerializeObject = typeof(JsonSerializer).GetMethod("Serialize", new[] { typeof(object), typeof(Type), typeof(JsonSerializerOptions) });
+	//private static readonly MethodInfo _MethodJsonConvertSerializeObject = typeof(JsonSerializer).GetMethod("Serialize", new[] { typeof(object), typeof(Type), typeof(JsonSerializerOptions) });
+
+	// 修改点 1: 更精确地获取 Deserialize 方法
+	// public static object? Deserialize(string json, Type returnType, JsonSerializerOptions? options = null)
+	private static readonly MethodInfo _MethodJsonConvertDeserializeObject = typeof(JsonSerializer).GetMethods(BindingFlags.Public | BindingFlags.Static)
+		.FirstOrDefault(m => m.Name == "Deserialize" && m.IsGenericMethod == false && m.GetParameters().Length == 3 &&
+			m.GetParameters()[0].ParameterType == typeof(string) &&
+			m.GetParameters()[1].ParameterType == typeof(Type) &&
+			m.GetParameters()[2].ParameterType == typeof(JsonSerializerOptions));
+
+	// 修改点 2: 更精确地获取 Serialize 方法
+	// public static string Serialize(object? value, Type inputType, JsonSerializerOptions? options = null)
+	private static readonly MethodInfo _MethodJsonConvertSerializeObject = typeof(JsonSerializer).GetMethods(BindingFlags.Public | BindingFlags.Static)
+		.FirstOrDefault(m => m.Name == "Serialize" && m.IsGenericMethod == false && m.GetParameters().Length == 3 &&
+			m.GetParameters()[0].ParameterType == typeof(object) &&
+			m.GetParameters()[1].ParameterType == typeof(Type) &&
+			m.GetParameters()[2].ParameterType == typeof(JsonSerializerOptions));
 
 	private static readonly ConcurrentDictionary<Type, ConcurrentDictionary<string, bool>> _DicJsonMapFluentApi = new ConcurrentDictionary<Type, ConcurrentDictionary<string, bool>>();
 	private static readonly object _ConcurrentObj = new object();
@@ -42,13 +58,13 @@ public static class FreeSqlJsonMapCoreExtensions {
 
 	public static void UseJsonMap(this IFreeSql fsql, JsonSerializerOptions settings) {
 		if (Interlocked.CompareExchange(ref _IsAoped, 1, 0) == 0) {
-			FreeSql.Internal.Utils.GetDataReaderValueBlockExpressionSwitchTypeFullName.Add((LabelTarget returnTarget, Expression valueExp, Type type) => {
+			FreeSql.Internal.Utils.GetDataReaderValueBlockExpressionSwitchTypeFullName.Add((returnTarget, valueExp, type) => {
 				if (_DicTypes.ContainsKey(type)) {
 					return Expression.IfThenElse(
 					Expression.TypeIs(valueExp, type),
 					Expression.Return(returnTarget, valueExp),
 					Expression.Return(returnTarget, Expression.TypeAs(Expression.Call(_MethodJsonConvertDeserializeObject, Expression.Convert(valueExp, typeof(string)), Expression.Constant(type), Expression.Constant(settings)), type))
-				);
+					);
 				}
 
 				return null;
@@ -77,10 +93,27 @@ public static class FreeSqlJsonMapCoreExtensions {
 				if (_DicTypes.TryAdd(e.Property.PropertyType, true)) {
 					lock (_ConcurrentObj) {
 						FreeSql.Internal.Utils.dicExecuteArrayRowReadClassOrTuple[e.Property.PropertyType] = true;
-						FreeSql.Internal.Utils.GetDataReaderValueBlockExpressionObjectToStringIfThenElse.Add((LabelTarget returnTarget, Expression valueExp, Expression elseExp, Type type) => {
+						//FreeSql.Internal.Utils.GetDataReaderValueBlockExpressionObjectToStringIfThenElse.Add((returnTarget, valueExp, elseExp, type) => {
+						//	return Expression.IfThenElse(
+						//		Expression.TypeIs(valueExp, e.Property.PropertyType),
+						//		Expression.Return(returnTarget, Expression.Call(_MethodJsonConvertSerializeObject, Expression.Convert(valueExp, typeof(object)), Expression.Constant(settings)), typeof(object)),
+						//		elseExp);
+						//});
+
+						// 2. 处理写入 (Serialize): Object -> DB String
+						// 这个钩子期望返回 string，但如果 elseExp 执行，可能返回 object
+						// 所以这里的 returnTarget 类型应该是 object (因为 Expression.Return 的类型必须匹配 LabelTarget)
+						FreeSql.Internal.Utils.GetDataReaderValueBlockExpressionObjectToStringIfThenElse.Add((returnTarget, valueExp, elseExp, type) => {
+							// 构造 Serialize 调用表达式
+							var serializeCall = Expression.Call(_MethodJsonConvertSerializeObject,
+								Expression.Convert(valueExp, typeof(object)),
+								Expression.Constant(e.Property.PropertyType),
+								Expression.Constant(settings));
+
 							return Expression.IfThenElse(
 								Expression.TypeIs(valueExp, e.Property.PropertyType),
-								Expression.Return(returnTarget, Expression.Call(_MethodJsonConvertSerializeObject, Expression.Convert(valueExp, typeof(object)), Expression.Constant(settings)), typeof(object)),
+								// 如果类型匹配，执行序列化，并将结果(string)转换为 object 返回 (以匹配 returnTarget 的类型)
+								Expression.Return(returnTarget, Expression.Convert(serializeCall, typeof(object))),
 								elseExp);
 						});
 					}
